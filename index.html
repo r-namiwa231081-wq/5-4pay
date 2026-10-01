@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>localStorage 表示ブックマークレット</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }
+    .bookmarklet-btn { display: inline-block; padding: 12px 20px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 16px 0; }
+    .bookmarklet-btn:hover { background-color: #1d4ed8; }
+    textarea { width: 100%; height: 80px; font-family: monospace; font-size: 13px; margin-top: 8px; border: 1px solid #ccc; border-radius: 4px; padding: 8px; }
+    code { background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>localStorage 表示ツール</h1>
+  <p>閲覧中のWebサイトの <code>localStorage</code> を画面上に大きなテキストエリアで表示するブックマークレットです。</p>
+
+  <h2>使い方</h2>
+  <ol>
+    <li>下の青いボタンを、ブラウザのブックマークバーに**ドラッグ＆ドロップ**します。</li>
+    <li><code>localStorage</code> を確認したいWebサイトを開きます。</li>
+    <li>ブックマークバーに追加したリンクをクリックします。</li>
+  </ol>
+
+  <!-- ドラッグ＆ドロップ用のリンク -->
+  <a class="bookmarklet-btn" href="javascript:(function(){let d=document.createElement('textarea');d.value=JSON.stringify(localStorage);d.style='position:fixed;top:10px;left:10px;width:90%;height:80%;z-index:99999;font-size:16px;';document.body.appendChild(d);})();">
+    localStorageを表示
+  </a>
+
+  <h3>スマホや手動登録用のコード</h3>
+  <p>スマホなどでドラッグ＆ドロップができない場合は、以下のコードをコピーしてブックマークのURL欄に貼り付けて使用してください。</p>
+  <textarea readonly onclick="this.select()">javascript:(function(){let d=document.createElement('textarea');d.value=JSON.stringify(localStorage);d.style='position:fixed;top:10px;left:10px;width:90%;height:80%;z-index:99999;font-size:16px;';document.body.appendChild(d);})();</textarea>
+</body>
+</html>
