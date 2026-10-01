@@ -1,35 +1,833 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>localStorage 表示ブックマークレット</title>
-  <style>
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }
-    .bookmarklet-btn { display: inline-block; padding: 12px 20px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 16px 0; }
-    .bookmarklet-btn:hover { background-color: #1d4ed8; }
-    textarea { width: 100%; height: 80px; font-family: monospace; font-size: 13px; margin-top: 8px; border: 1px solid #ccc; border-radius: 4px; padding: 8px; }
-    code { background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClassPoints Pro - クラスポイント＆特典管理</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- QRCode.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Firebase SDK (オンライン共有用) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&family=Zen+Maru+Gothic:wght@500;700;900&display=swap');
+        body {
+            font-family: 'Zen Maru Gothic', sans-serif;
+            background-color: #f8fafc;
+        }
+        .pin-digit {
+            -webkit-text-security: disc;
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-qr-area, #printable-qr-area * {
+                visibility: visible;
+            }
+            #printable-qr-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+    </style>
 </head>
-<body>
-  <h1>localStorage 表示ツール</h1>
-  <p>閲覧中のWebサイトの <code>localStorage</code> を画面上に大きなテキストエリアで表示するブックマークレットです。</p>
+<body class="text-slate-800 min-h-screen flex flex-col justify-between">
 
-  <h2>使い方</h2>
-  <ol>
-    <li>下の青いボタンを、ブラウザのブックマークバーに**ドラッグ＆ドロップ**します。</li>
-    <li><code>localStorage</code> を確認したいWebサイトを開きます。</li>
-    <li>ブックマークバーに追加したリンクをクリックします。</li>
-  </ol>
+    <!-- ヘッダー -->
+    <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="navigateHome()">
+                <div class="bg-amber-400 text-indigo-900 p-2 rounded-xl font-black text-xl shadow-inner">
+                    <i class="fa-solid fa-star"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wide flex items-center gap-2">
+                        ClassPoints <span class="bg-indigo-800 text-amber-300 text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/50">PRO</span>
+                    </h1>
+                    <p class="text-xs text-indigo-200" id="header-subtitle">クラスポイント管理システム</p>
+                </div>
+            </div>
 
-  <!-- ドラッグ＆ドロップ用のリンク -->
-  <a class="bookmarklet-btn" href="javascript:(function(){let d=document.createElement('textarea');d.value=JSON.stringify(localStorage);d.style='position:fixed;top:10px;left:10px;width:90%;height:80%;z-index:99999;font-size:16px;';document.body.appendChild(d);})();">
-    localStorageを表示
-  </a>
+            <!-- 右上アクション -->
+            <div id="header-actions">
+                <button id="btn-admin-login" onclick="openPinModal()" class="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-800 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 border border-indigo-500/40 shadow-sm">
+                    <i class="fa-solid fa-lock"></i>
+                    <span>先生ログイン</span>
+                </button>
+            </div>
+        </div>
+    </header>
 
-  <h3>スマホや手動登録用のコード</h3>
-  <p>スマホなどでドラッグ＆ドロップができない場合は、以下のコードをコピーしてブックマークのURL欄に貼り付けて使用してください。</p>
-  <textarea readonly onclick="this.select()">javascript:(function(){let d=document.createElement('textarea');d.value=JSON.stringify(localStorage);d.style='position:fixed;top:10px;left:10px;width:90%;height:80%;z-index:99999;font-size:16px;';document.body.appendChild(d);})();</textarea>
+    <!-- メインコンテンツ -->
+    <main class="max-w-6xl mx-auto px-4 py-6 flex-grow w-full">
+
+        <!-- トースト通知 -->
+        <div id="toast" class="hidden fixed bottom-6 right-6 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl z-50 flex items-center space-x-3 transition-all">
+            <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+            <span id="toast-msg" class="font-bold text-sm">処理が完了しました</span>
+        </div>
+
+        <!-- 1. 生徒専用ビュー -->
+        <div id="view-student" class="hidden space-y-6">
+            <div class="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 rounded-3xl p-6 text-white shadow-xl flex flex-col md:flex-row justify-between items-center gap-6">
+                <div class="flex items-center space-x-4 w-full md:w-auto">
+                    <div class="bg-white/10 p-4 rounded-2xl backdrop-blur-md border border-white/20">
+                        <i class="fa-solid fa-user-astronaut text-4xl text-amber-300"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs text-indigo-200 font-bold block">ログイン中の生徒</span>
+                        <h2 id="student-display-name" class="text-2xl font-black tracking-wide">---</h2>
+                        <span id="student-url-badge" class="inline-block mt-1 bg-white/10 text-[10px] px-2 py-0.5 rounded-md font-mono text-indigo-200">専用URL接続中</span>
+                    </div>
+                </div>
+
+                <div class="bg-white/15 backdrop-blur-md border border-white/20 px-8 py-4 rounded-2xl flex items-center space-x-6 w-full md:w-auto justify-between md:justify-end shadow-inner">
+                    <span class="text-sm font-bold text-indigo-100">つかえるポイント</span>
+                    <div class="text-4xl font-black text-amber-300 flex items-baseline space-x-1">
+                        <span id="student-my-points">0</span>
+                        <span class="text-sm text-white font-bold">pt</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="md:col-span-2 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-store text-indigo-600"></i>
+                            <span>ポイント交換ストア</span>
+                        </h3>
+                        <span class="text-xs text-slate-500 font-bold">交換したいサービスを選んでね</span>
+                    </div>
+                    <div id="student-store-list" class="grid sm:grid-cols-2 gap-4"></div>
+                </div>
+
+                <div class="space-y-4">
+                    <h3 class="text-lg font-bold text-slate-800 flex items-center space-x-2">
+                        <i class="fa-solid fa-clock-rotate-left text-indigo-600"></i>
+                        <span>じぶんの獲得・利用履歴</span>
+                    </h3>
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 max-h-[520px] overflow-y-auto">
+                        <div id="student-my-logs" class="space-y-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 先生（管理者）ビュー -->
+        <div id="view-admin" class="hidden space-y-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-3">
+                <div class="flex items-center space-x-2 text-indigo-700 font-bold">
+                    <i class="fa-solid fa-user-shield text-xl"></i>
+                    <span>管理者ダッシュボード（リアルタイム同期中）</span>
+                </div>
+                <div class="flex items-center space-x-2 w-full sm:w-auto">
+                    <button onclick="lockAdmin()" class="w-full sm:w-auto px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        <span>ログアウト</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex border-b border-slate-200 space-x-1 md:space-x-2 overflow-x-auto">
+                <button onclick="switchAdminTab('grant')" id="atab-grant" class="py-2.5 px-4 font-bold text-indigo-600 border-b-2 border-indigo-600 flex items-center space-x-2 whitespace-nowrap text-sm">
+                    <i class="fa-solid fa-hand-holding-dollar"></i><span>ポイント配布</span>
+                </button>
+                <button onclick="switchAdminTab('students')" id="atab-students" class="py-2.5 px-4 font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent flex items-center space-x-2 whitespace-nowrap text-sm">
+                    <i class="fa-solid fa-users"></i><span>生徒＆専用URL管理</span>
+                </button>
+                <button onclick="switchAdminTab('rewards')" id="atab-rewards" class="py-2.5 px-4 font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent flex items-center space-x-2 whitespace-nowrap text-sm">
+                    <i class="fa-solid fa-store"></i><span>特典（サービス）</span>
+                </button>
+                <button onclick="switchAdminTab('logs')" id="atab-logs" class="py-2.5 px-4 font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent flex items-center space-x-2 whitespace-nowrap text-sm">
+                    <i class="fa-solid fa-list-check"></i><span>全体履歴</span>
+                </button>
+                <button onclick="switchAdminTab('settings')" id="atab-settings" class="py-2.5 px-4 font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent flex items-center space-x-2 whitespace-nowrap text-sm">
+                    <i class="fa-solid fa-gear"></i><span>設定・PIN変更</span>
+                </button>
+            </div>
+
+            <!-- タブ 1: ポイント配布 -->
+            <div id="atab-content-grant" class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                    <div class="flex items-center space-x-3 text-indigo-600">
+                        <div class="bg-indigo-50 p-3 rounded-xl"><i class="fa-solid fa-bullhorn text-xl"></i></div>
+                        <h3 class="text-base font-bold">クラス全員へ一括配布</h3>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">付与ポイント</label>
+                        <input type="number" id="grant-all-pts" value="10" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold text-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">理由・メッセージ</label>
+                        <input type="text" id="grant-all-reason" placeholder="例: 今日の発表会が素晴らしかった！" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <button onclick="grantAllPoints()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow transition text-sm">
+                        全員にポイントをあげる
+                    </button>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                    <div class="flex items-center space-x-3 text-emerald-600">
+                        <div class="bg-emerald-50 p-3 rounded-xl"><i class="fa-solid fa-user-plus text-xl"></i></div>
+                        <h3 class="text-base font-bold">特定の生徒に個別配布</h3>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">対象の生徒を選択</label>
+                        <select id="grant-single-student" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">付与ポイント（※マイナスで減算）</label>
+                        <input type="number" id="grant-single-pts" value="5" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold text-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">理由・メッセージ</label>
+                        <input type="text" id="grant-single-reason" placeholder="例: 係のお仕事を自発的にやってくれた" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <button onclick="grantSinglePoints()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow transition text-sm">
+                        指定した生徒にあげる
+                    </button>
+                </div>
+            </div>
+
+            <!-- タブ 2: 生徒＆専用URL管理 -->
+            <div id="atab-content-students" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row gap-4 items-end justify-between">
+                    <div class="w-full">
+                        <label class="block text-xs font-bold text-slate-500 mb-1">新しい生徒を追加</label>
+                        <input type="text" id="new-student-name" placeholder="生徒の氏名（例: 田中 健太）" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <button onclick="addStudent()" class="w-full sm:w-auto whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-xl shadow transition text-sm">
+                        登録する
+                    </button>
+                </div>
+                <div id="admin-students-grid" class="grid md:grid-cols-2 gap-4"></div>
+            </div>
+
+            <!-- タブ 3: 特典管理 -->
+            <div id="atab-content-rewards" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 grid md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">サービス・特典名</label>
+                        <input type="text" id="new-reward-title" placeholder="例: 1日好きな席を選べる権" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">必要ポイント</label>
+                        <input type="number" id="new-reward-cost" placeholder="30" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="addReward()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl shadow text-sm">
+                            特典を追加
+                        </button>
+                    </div>
+                </div>
+                <div id="rewards-admin-list" class="grid sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
+            </div>
+
+            <!-- タブ 4: 全体履歴 -->
+            <div id="atab-content-logs" class="hidden space-y-4">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-4 border-b border-slate-200 font-bold text-slate-700 text-sm flex justify-between items-center">
+                        <span>すべての配布・利用アクティビティ</span>
+                        <span class="text-xs text-slate-400 font-normal">最新のものが上に表示されます</span>
+                    </div>
+                    <div id="all-logs-list" class="divide-y divide-slate-100 max-h-[500px] overflow-y-auto"></div>
+                </div>
+            </div>
+
+            <!-- タブ 5: 設定 & PIN変更 -->
+            <div id="atab-content-settings" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 max-w-md space-y-4">
+                    <h3 class="font-bold text-slate-800 flex items-center space-x-2">
+                        <i class="fa-solid fa-key text-indigo-600"></i>
+                        <span>先生用暗証番号（PIN）の変更</span>
+                    </h3>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">現在のPIN</label>
+                        <input type="password" id="pin-current" maxlength="4" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-center text-lg font-mono tracking-widest">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">新しいPIN (4桁の数字)</label>
+                        <input type="password" id="pin-new" maxlength="4" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-center text-lg font-mono tracking-widest">
+                    </div>
+                    <button onclick="changePin()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 rounded-xl shadow text-sm">
+                        暗証番号を変更する
+                    </button>
+                </div>
+
+                <div class="bg-rose-50 border border-rose-200 p-6 rounded-2xl max-w-md space-y-3">
+                    <h3 class="font-bold text-rose-800 flex items-center space-x-2">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>データリセット</span>
+                    </h3>
+                    <p class="text-xs text-rose-600">すべての生徒、ポイント、履歴を初期状態に戻します。</p>
+                    <button onclick="resetAllData()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow">
+                        初期状態にリセット
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. デモ用 ポータル画面 -->
+        <div id="view-portal" class="hidden space-y-8 max-w-2xl mx-auto py-8">
+            <div class="text-center space-y-3">
+                <span class="bg-indigo-100 text-indigo-700 text-xs font-extrabold px-3 py-1 rounded-full">クラスポイントシステム</span>
+                <h2 class="text-3xl font-black text-slate-800">生徒または先生を選択してください</h2>
+                <p class="text-sm text-slate-500">生徒専用URLからアクセスすると、直接個人のポイント画面が開きます。</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
+                <h3 class="font-bold text-slate-700 text-sm flex items-center space-x-2">
+                    <i class="fa-solid fa-users text-indigo-600"></i>
+                    <span>生徒として体験（一覧から選択）</span>
+                </h3>
+                <div id="portal-students-list" class="grid sm:grid-cols-2 gap-3"></div>
+            </div>
+
+            <div class="bg-indigo-50 border border-indigo-100 p-6 rounded-3xl text-center space-y-3">
+                <h3 class="font-bold text-indigo-900 text-sm">先生・管理者の方はこちら</h3>
+                <p class="text-xs text-indigo-600">暗証番号（初期PIN: 1234）を入力してポイント配布や設定を行えます。</p>
+                <button onclick="openPinModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-xl shadow transition text-sm">
+                    <i class="fa-solid fa-lock mr-2"></i>先生ログイン
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- フッター -->
+    <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+        <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
+            <span>ClassPoints PRO &copy; 2026</span>
+            <button onclick="openPinModal()" class="text-slate-400 hover:text-indigo-600 font-bold transition">
+                <i class="fa-solid fa-user-lock mr-1"></i>先生用ログイン
+            </button>
+        </div>
+    </footer>
+
+    <!-- PIN入力モーダル -->
+    <div id="pin-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full space-y-5 animate-scaleUp">
+            <div class="text-center space-y-1">
+                <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-xl font-bold">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800">先生用 暗証番号入力</h3>
+                <p class="text-xs text-slate-400">初期PIN: <span class="font-mono font-bold text-indigo-600">1234</span></p>
+            </div>
+            <div>
+                <input type="password" id="pin-input" maxlength="4" placeholder="••••" class="w-full text-center text-3xl font-mono tracking-widest border-2 border-slate-200 rounded-2xl py-3 focus:border-indigo-600 focus:outline-none">
+                <p id="pin-error" class="hidden text-rose-500 text-xs font-bold text-center mt-2">暗証番号が正しくありません</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="closePinModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">キャンセル</button>
+                <button onclick="verifyPin()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow">認証して入る</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- QRコードモーダル -->
+    <div id="qr-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl p-6 max-w-md w-full space-y-5">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 id="qr-student-name" class="text-lg font-bold text-slate-800">--- さんの専用アクセス</h3>
+                    <p class="text-xs text-slate-400">この端末専用のアクセス用情報です</p>
+                </div>
+                <button onclick="closeQrModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div id="printable-qr-area" class="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col items-center justify-center space-y-4">
+                <div class="text-center">
+                    <span class="text-xs font-bold text-indigo-600">ClassPoints 専用QRコード</span>
+                    <h4 id="qr-print-student-name" class="text-xl font-black text-slate-800">---</h4>
+                </div>
+                <div id="qrcode-container" class="bg-white p-3 rounded-xl shadow-md border border-slate-100"></div>
+                <p class="text-[10px] text-slate-400 text-center max-w-xs">カメラやタブレットで読み取ると、暗証番号不要でこの生徒の専用ポイント画面が開きます。</p>
+            </div>
+            <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-500">専用URL</label>
+                <div class="flex space-x-2">
+                    <input type="text" id="qr-student-url" readonly class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono bg-slate-50">
+                    <button onclick="copyQrUrl()" class="whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-2 rounded-xl text-xs shadow">コピー</button>
+                </div>
+            </div>
+            <div class="flex space-x-2">
+                <button onclick="window.print()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs shadow flex items-center justify-center space-x-1">
+                    <i class="fa-solid fa-print"></i><span>印刷する</span>
+                </button>
+                <button onclick="closeQrModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">閉じる</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ★ 専用URL組み込み済みFirebase設定 ★
+        const firebaseConfig = {
+            databaseURL: "https://pay-8e70e-default-rtdb.firebaseio.com"
+        };
+
+        if (firebaseConfig.databaseURL !== "YOUR_DATABASE_URL_HERE") {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.database();
+
+        const DEFAULT_DATA = {
+            pin: '1234',
+            students: [
+                { id: 1, name: '山田 太郎', points: 45 },
+                { id: 2, name: '佐藤 花子', points: 80 },
+                { id: 3, name: '鈴木 健太', points: 30 },
+                { id: 4, name: '高橋 咲', points: 65 }
+            ],
+            rewards: [
+                { id: 1, title: '席替え優先権', cost: 30, desc: '次回の席替えで希望の席を選べます' },
+                { id: 2, title: '宿題1回免除券', cost: 100, desc: '日々のプリント宿題を1回免除' },
+                { id: 3, title: '自由時間 5分拡大', cost: 20, desc: '休み時間を5分延長できます' },
+                { id: 4, title: '好きなBGMリクエスト', cost: 10, desc: '給食の時間に好きな音楽をリクエスト' }
+            ],
+            logs: [
+                { id: 1, date: '2026/09/30 09:00', type: 'grant', studentName: '山田 太郎', amount: 10, reason: '朝の挨拶が元気が良かった' },
+                { id: 2, date: '2026/09/30 10:30', type: 'grant', studentName: '全員', amount: 5, reason: '掃除の時間に全員で協力できた' },
+                { id: 3, date: '2026/09/30 13:15', type: 'use', studentName: '佐藤 花子', rewardTitle: '席替え優先権', amount: -30 }
+            ]
+        };
+
+        let appData = DEFAULT_DATA;
+        let isAdminAuthenticated = false;
+        let qrcodeObj = null;
+
+        // ★ オンライン（Firebase）へデータを保存 ★
+        function saveData() {
+            if (firebaseConfig.databaseURL !== "YOUR_DATABASE_URL_HERE") {
+                db.ref('class_points_pro').set(appData);
+            } else {
+                localStorage.setItem('class_points_pro_data', JSON.stringify(appData));
+            }
+            router();
+        }
+
+        // ★ オンラインデータをリアルタイム監視・受信 ★
+        if (firebaseConfig.databaseURL !== "YOUR_DATABASE_URL_HERE") {
+            db.ref('class_points_pro').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    appData = data;
+                } else {
+                    db.ref('class_points_pro').set(DEFAULT_DATA);
+                }
+                router();
+            });
+        } else {
+            appData = JSON.parse(localStorage.getItem('class_points_pro_data')) || DEFAULT_DATA;
+        }
+
+        function showToast(msg, isSuccess = true) {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            document.getElementById('toast-msg').innerText = msg;
+            icon.className = isSuccess ? "fa-solid fa-circle-check text-emerald-400 text-lg" : "fa-solid fa-triangle-exclamation text-rose-400 text-lg";
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2500);
+        }
+
+        function router() {
+            const hash = window.location.hash;
+            const viewStudent = document.getElementById('view-student');
+            const viewAdmin = document.getElementById('view-admin');
+            const viewPortal = document.getElementById('view-portal');
+            const headerActions = document.getElementById('header-actions');
+            const headerSubtitle = document.getElementById('header-subtitle');
+
+            viewStudent.classList.add('hidden');
+            viewAdmin.classList.add('hidden');
+            viewPortal.classList.add('hidden');
+
+            if (hash.startsWith('#student=')) {
+                const studentId = parseInt(hash.replace('#student=', ''));
+                const student = appData.students.find(s => s.id === studentId);
+
+                if (student) {
+                    viewStudent.classList.remove('hidden');
+                    headerActions.classList.add('hidden');
+                    headerSubtitle.innerText = `${student.name} さんのポイント`;
+                    renderStudentView(student);
+                } else {
+                    window.location.hash = '';
+                }
+            } else if (hash === '#admin') {
+                if (isAdminAuthenticated) {
+                    viewAdmin.classList.remove('hidden');
+                    headerActions.classList.add('hidden');
+                    headerSubtitle.innerText = '先生用管理画面';
+                    renderAdminView();
+                } else {
+                    openPinModal();
+                }
+            } else {
+                viewPortal.classList.remove('hidden');
+                headerActions.classList.remove('hidden');
+                headerSubtitle.innerText = 'クラスポイント管理システム';
+                renderPortalView();
+            }
+        }
+
+        window.addEventListener('hashchange', router);
+
+        function navigateHome() {
+            if (!window.location.hash.startsWith('#student=')) {
+                window.location.hash = '';
+            }
+        }
+
+        function openPinModal() {
+            document.getElementById('pin-modal').classList.remove('hidden');
+            document.getElementById('pin-input').value = '';
+            document.getElementById('pin-error').classList.add('hidden');
+            document.getElementById('pin-input').focus();
+        }
+
+        function closePinModal() {
+            document.getElementById('pin-modal').classList.add('hidden');
+            if (window.location.hash === '#admin' && !isAdminAuthenticated) {
+                window.location.hash = '';
+            }
+        }
+
+        function verifyPin() {
+            const pin = document.getElementById('pin-input').value;
+            if (pin === appData.pin) {
+                isAdminAuthenticated = true;
+                closePinModal();
+                window.location.hash = '#admin';
+                showToast('先生モードにログインしました');
+                router();
+            } else {
+                document.getElementById('pin-error').classList.remove('hidden');
+            }
+        }
+
+        function lockAdmin() {
+            isAdminAuthenticated = false;
+            window.location.hash = '';
+            showToast('ログアウトしました');
+        }
+
+        function changePin() {
+            const curr = document.getElementById('pin-current').value;
+            const newP = document.getElementById('pin-new').value;
+
+            if (curr !== appData.pin) {
+                showToast('現在のPINが正しくありません', false);
+                return;
+            }
+            if (!/^\d{4}$/.test(newP)) {
+                showToast('新しいPINは4桁の数字で入力してください', false);
+                return;
+            }
+
+            appData.pin = newP;
+            document.getElementById('pin-current').value = '';
+            document.getElementById('pin-new').value = '';
+            showToast('暗証番号（PIN）を更新しました');
+            saveData();
+        }
+
+        function resetAllData() {
+            if (confirm('本当にすべてのデータをリセットしますか？')) {
+                appData = DEFAULT_DATA;
+                showToast('データを初期状態にリセットしました');
+                saveData();
+            }
+        }
+
+        function openQrModal(studentId) {
+            const student = appData.students.find(s => s.id === studentId);
+            if (!student) return;
+
+            const baseUrl = window.location.origin + window.location.pathname;
+            const dedicatedUrl = `${baseUrl}#student=${student.id}`;
+
+            document.getElementById('qr-student-name').innerText = `${student.name} さんの専用アクセス`;
+            document.getElementById('qr-print-student-name').innerText = `${student.name} さん専用`;
+            document.getElementById('qr-student-url').value = dedicatedUrl;
+
+            const container = document.getElementById('qrcode-container');
+            container.innerHTML = '';
+            qrcodeObj = new QRCode(container, {
+                text: dedicatedUrl,
+                width: 180,
+                height: 180,
+                colorDark : "#312e81",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+
+            document.getElementById('qr-modal').classList.remove('hidden');
+        }
+
+        function closeQrModal() {
+            document.getElementById('qr-modal').classList.add('hidden');
+        }
+
+        function copyQrUrl() {
+            const input = document.getElementById('qr-student-url');
+            input.select();
+            document.execCommand('copy');
+            showToast('専用URLをコピーしました！');
+        }
+
+        function copyStudentUrlDirect(studentId) {
+            const baseUrl = window.location.origin + window.location.pathname;
+            const dedicatedUrl = `${baseUrl}#student=${studentId}`;
+            
+            const tempInput = document.createElement('input');
+            tempInput.value = dedicatedUrl;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            showToast('専用URLをコピーしました！');
+        }
+
+        function switchAdminTab(tab) {
+            ['grant', 'students', 'rewards', 'logs', 'settings'].forEach(t => {
+                const btn = document.getElementById(`atab-${t}`);
+                const content = document.getElementById(`atab-content-${t}`);
+                if (t === tab) {
+                    btn.className = "py-2.5 px-4 font-bold text-indigo-600 border-b-2 border-indigo-600 flex items-center space-x-2 whitespace-nowrap text-sm";
+                    content.classList.remove('hidden');
+                } else {
+                    btn.className = "py-2.5 px-4 font-bold text-slate-500 hover:text-indigo-600 border-b-2 border-transparent flex items-center space-x-2 whitespace-nowrap text-sm";
+                    content.classList.add('hidden');
+                }
+            });
+        }
+
+        function grantAllPoints() {
+            const pts = parseInt(document.getElementById('grant-all-pts').value) || 0;
+            const reason = document.getElementById('grant-all-reason').value || '先生からのポイント';
+            if (pts === 0) return;
+
+            appData.students.forEach(s => s.points += pts);
+            if (!appData.logs) appData.logs = [];
+            appData.logs.unshift({
+                id: Date.now(),
+                date: new Date().toLocaleString('ja-JP'),
+                type: 'grant',
+                studentName: '全員',
+                amount: pts,
+                reason: reason
+            });
+            showToast(`全員に ${pts} pt を一括配布しました`);
+            document.getElementById('grant-all-reason').value = '';
+            saveData();
+        }
+
+        function grantSinglePoints() {
+            const studentId = parseInt(document.getElementById('grant-single-student').value);
+            const pts = parseInt(document.getElementById('grant-single-pts').value) || 0;
+            const reason = document.getElementById('grant-single-reason').value || '個別付与';
+            
+            const student = appData.students.find(s => s.id === studentId);
+            if (!student || pts === 0) return;
+
+            student.points += pts;
+            if (!appData.logs) appData.logs = [];
+            appData.logs.unshift({
+                id: Date.now(),
+                date: new Date().toLocaleString('ja-JP'),
+                type: 'grant',
+                studentName: student.name,
+                amount: pts,
+                reason: reason
+            });
+            showToast(`${student.name} さんに ${pts} pt を配布しました`);
+            document.getElementById('grant-single-reason').value = '';
+            saveData();
+        }
+
+        function addStudent() {
+            const nameInput = document.getElementById('new-student-name');
+            const name = nameInput.value.trim();
+            if (!name) return;
+
+            if (!appData.students) appData.students = [];
+            const newId = appData.students.length ? Math.max(...appData.students.map(s => s.id)) + 1 : 1;
+            appData.students.push({ id: newId, name: name, points: 0 });
+            nameInput.value = '';
+            showToast(`${name} さんを登録しました`);
+            saveData();
+        }
+
+        function deleteStudent(id) {
+            if (confirm('この生徒を削除してもよろしいですか？')) {
+                appData.students = appData.students.filter(s => s.id !== id);
+                saveData();
+            }
+        }
+
+        function addReward() {
+            const tInput = document.getElementById('new-reward-title');
+            const cInput = document.getElementById('new-reward-cost');
+            const title = tInput.value.trim();
+            const cost = parseInt(cInput.value) || 0;
+
+            if (!title || cost <= 0) return;
+
+            if (!appData.rewards) appData.rewards = [];
+            const newId = appData.rewards.length ? Math.max(...appData.rewards.map(r => r.id)) + 1 : 1;
+            appData.rewards.push({ id: newId, title: title, cost: cost, desc: 'サービス特典' });
+            tInput.value = '';
+            cInput.value = '';
+            showToast(`特典「${title}」を追加しました`);
+            saveData();
+        }
+
+        function deleteReward(id) {
+            appData.rewards = appData.rewards.filter(r => r.id !== id);
+            saveData();
+        }
+
+        function redeemReward(rewardId, studentId) {
+            const student = appData.students.find(s => s.id === studentId);
+            const reward = appData.rewards.find(r => r.id === rewardId);
+
+            if (!student || !reward) return;
+
+            if (student.points < reward.cost) {
+                showToast('ポイントが足りません', false);
+                return;
+            }
+
+            if (confirm(`「${reward.title}」を ${reward.cost} pt で利用しますか？`)) {
+                student.points -= reward.cost;
+                if (!appData.logs) appData.logs = [];
+                appData.logs.unshift({
+                    id: Date.now(),
+                    date: new Date().toLocaleString('ja-JP'),
+                    type: 'use',
+                    studentName: student.name,
+                    rewardTitle: reward.title,
+                    amount: -reward.cost
+                });
+                showToast(`「${reward.title}」と交換しました！`);
+                saveData();
+            }
+        }
+
+        function renderStudentView(student) {
+            document.getElementById('student-display-name').innerText = student.name;
+            document.getElementById('student-my-points').innerText = student.points;
+
+            const storeList = document.getElementById('student-store-list');
+            storeList.innerHTML = (appData.rewards || []).map(r => {
+                const canAfford = student.points >= r.cost;
+                return `
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-3">
+                        <div>
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-bold text-slate-800 text-sm">${r.title}</h4>
+                                <span class="bg-amber-100 text-amber-900 text-xs font-black px-2.5 py-1 rounded-lg">${r.cost} pt</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-2">${r.desc}</p>
+                        </div>
+                        <button onclick="redeemReward(${r.id}, ${student.id})" ${!canAfford ? 'disabled' : ''} class="w-full py-2.5 rounded-xl font-bold text-xs transition ${canAfford ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}">
+                            ${canAfford ? 'この特典を使う' : 'ポイント不足'}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+
+            const myLogs = document.getElementById('student-my-logs');
+            const studentLogs = (appData.logs || []).filter(l => l.studentName === student.name || l.studentName === '全員');
+            if (studentLogs.length === 0) {
+                myLogs.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">履歴はまだありません</p>`;
+            } else {
+                myLogs.innerHTML = studentLogs.map(l => `
+                    <div class="p-3 bg-slate-50 rounded-xl text-xs flex justify-between items-center border border-slate-100">
+                        <div>
+                            <div class="font-bold text-slate-700">${l.type === 'grant' ? l.reason : 'サービス利用: ' + l.rewardTitle}</div>
+                            <div class="text-[10px] text-slate-400 mt-0.5">${l.date}</div>
+                        </div>
+                        <span class="font-black text-sm ${l.amount > 0 ? 'text-emerald-600' : 'text-rose-500'}">${l.amount > 0 ? '+' + l.amount : l.amount} pt</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function renderAdminView() {
+            const singleSel = document.getElementById('grant-single-student');
+            singleSel.innerHTML = (appData.students || []).map(s => `<option value="${s.id}">${s.name} (${s.points} pt)</option>`).join('');
+
+            const grid = document.getElementById('admin-students-grid');
+            grid.innerHTML = (appData.students || []).map(s => `
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-bold text-slate-800 text-base">${s.name}</h4>
+                            <div class="text-xs text-indigo-600 font-black mt-0.5">${s.points} pt</div>
+                        </div>
+                        <button onclick="deleteStudent(${s.id})" class="text-slate-300 hover:text-rose-500 text-xs"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                    <div class="pt-2 border-t border-slate-100 flex gap-2">
+                        <button onclick="copyStudentUrlDirect(${s.id})" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-link text-indigo-600"></i>
+                            <span>URLコピー</span>
+                        </button>
+                        <button onclick="openQrModal(${s.id})" class="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1">
+                            <i class="fa-solid fa-qrcode"></i>
+                            <span>QRコード</span>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            const rewAdmin = document.getElementById('rewards-admin-list');
+            rewAdmin.innerHTML = (appData.rewards || []).map(r => `
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+                    <div>
+                        <div class="font-bold text-slate-800 text-sm">${r.title}</div>
+                        <div class="text-xs text-amber-600 font-extrabold mt-0.5">${r.cost} pt</div>
+                    </div>
+                    <button onclick="deleteReward(${r.id})" class="text-slate-300 hover:text-rose-500 text-xs p-2"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            `).join('');
+
+            const allLogs = document.getElementById('all-logs-list');
+            allLogs.innerHTML = (appData.logs || []).map(l => `
+                <div class="p-3 text-xs flex justify-between items-center hover:bg-slate-50 transition">
+                    <div>
+                        <span class="text-slate-400 font-mono text-[10px]">${l.date}</span>
+                        <span class="font-bold ml-2 ${l.type === 'grant' ? 'text-indigo-600' : 'text-amber-600'}">[${l.studentName}]</span>
+                        <span class="text-slate-700 ml-1">${l.type === 'grant' ? l.reason : '「' + l.rewardTitle + '」と交換'}</span>
+                    </div>
+                    <span class="font-black ${l.amount > 0 ? 'text-emerald-600' : 'text-rose-500'}">${l.amount > 0 ? '+' + l.amount : l.amount} pt</span>
+                </div>
+            `).join('');
+        }
+
+        function renderPortalView() {
+            const list = document.getElementById('portal-students-list');
+            list.innerHTML = (appData.students || []).map(s => `
+                <a href="#student=${s.id}" class="bg-slate-50 hover:bg-indigo-50 hover:border-indigo-300 border border-slate-200 p-3.5 rounded-2xl flex justify-between items-center transition group">
+                    <span class="font-bold text-slate-700 group-hover:text-indigo-700 text-sm">${s.name}</span>
+                    <span class="text-xs font-black text-indigo-600">${s.points} pt <i class="fa-solid fa-chevron-right ml-1"></i></span>
+                </a>
+            `).join('');
+        }
+
+        document.getElementById('pin-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') verifyPin();
+        });
+
+        router();
+    </script>
 </body>
 </html>
