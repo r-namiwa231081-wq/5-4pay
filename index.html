@@ -11,10 +11,8 @@
     <!-- QRCode.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- 演出用（紙吹雪）ライブラリ -->
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <!-- Firebase SDK (オンライン共有用) -->
-    <!-- 演出用（紙吹雪）ライブラリ -->
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
@@ -27,12 +25,8 @@
             -webkit-text-security: disc;
         }
         @media print {
-            body * {
-                visibility: hidden;
-            }
-            #printable-qr-area, #printable-qr-area * {
-                visibility: visible;
-            }
+            body * { visibility: hidden; }
+            #printable-qr-area, #printable-qr-area * { visibility: visible; }
             #printable-qr-area {
                 position: absolute;
                 left: 0;
@@ -138,6 +132,15 @@
                         <span>ログアウト</span>
                     </button>
                 </div>
+            </div>
+
+            <!-- ★ 生徒からの交換申請枠 ★ -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-indigo-100 space-y-3">
+                <h3 class="font-bold text-slate-800 text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-inbox text-indigo-600"></i>
+                    <span>📩 生徒からの交換申請</span>
+                </h3>
+                <div id="request-list">現在、新しい申請はありません。</div>
             </div>
 
             <div class="flex border-b border-slate-200 space-x-1 md:space-x-2 overflow-x-auto">
@@ -265,7 +268,6 @@
                         暗証番号を変更する
                     </button>
                 </div>
-
                 <div class="bg-rose-50 border border-rose-200 p-6 rounded-2xl max-w-md space-y-3">
                     <h3 class="font-bold text-rose-800 flex items-center space-x-2">
                         <i class="fa-solid fa-triangle-exclamation"></i>
@@ -317,7 +319,7 @@
 
     <!-- PIN入力モーダル -->
     <div id="pin-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full space-y-5 animate-scaleUp">
+        <div class="bg-white rounded-3xl shadow-2xl p-6 max-w-sm w-full space-y-5">
             <div class="text-center space-y-1">
                 <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto text-xl font-bold">
                     <i class="fa-solid fa-shield-halved"></i>
@@ -370,8 +372,9 @@
         </div>
     </div>
 
+    <!-- JavaScript ロジック -->
     <script>
-        // ★ 専用URL組み込み済みFirebase設定 ★
+        // ★ Firebase設定 ★
         const firebaseConfig = {
             databaseURL: "https://pay-8e70e-default-rtdb.firebaseio.com"
         };
@@ -406,7 +409,7 @@
         let isAdminAuthenticated = false;
         let qrcodeObj = null;
 
-        // ★ オンライン（Firebase）へデータを保存 ★
+        // 保存処理
         function saveData() {
             if (firebaseConfig.databaseURL !== "YOUR_DATABASE_URL_HERE") {
                 db.ref('class_points_pro').set(appData);
@@ -416,7 +419,7 @@
             router();
         }
 
-        // ★ オンラインデータをリアルタイム監視・受信 ★
+        // リアルタイム同期（全体データ＋交換申請データ）
         if (firebaseConfig.databaseURL !== "YOUR_DATABASE_URL_HERE") {
             db.ref('class_points_pro').on('value', (snapshot) => {
                 const data = snapshot.val();
@@ -426,6 +429,39 @@
                     db.ref('class_points_pro').set(DEFAULT_DATA);
                 }
                 router();
+            });
+
+            // 📩 生徒からの申請をリアルタイム受信
+            db.ref('requests').on('value', (snapshot) => {
+                const requests = snapshot.val();
+                const listElement = document.getElementById('request-list');
+                if (!listElement) return;
+
+                listElement.innerHTML = '';
+                if (!requests) {
+                    listElement.innerHTML = '<p class="text-slate-400 text-xs">現在、新しい申請はありません。</p>';
+                    return;
+                }
+
+                let pendingCount = 0;
+                for (let id in requests) {
+                    const req = requests[id];
+                    if (req.status === 'pending') {
+                        pendingCount++;
+                        listElement.innerHTML += `
+                            <div class="p-3 bg-slate-50 rounded-xl mb-2 flex justify-between items-center border border-slate-200">
+                                <div>
+                                    <span class="font-bold text-indigo-600">${req.studentName}</span> さん：
+                                    <span class="font-bold text-slate-800">${req.itemName}</span> (${req.cost}pt)
+                                </div>
+                                <button onclick="approveRequest('${id}', ${req.studentId}, ${req.cost}, '${req.studentName}', '${req.itemName}')" class="bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg text-xs hover:bg-emerald-700 shadow transition">承認する</button>
+                            </div>
+                        `;
+                    }
+                }
+                if (pendingCount === 0) {
+                    listElement.innerHTML = '<p class="text-slate-400 text-xs">現在、新しい申請はありません。</p>';
+                }
             });
         } else {
             appData = JSON.parse(localStorage.getItem('class_points_pro_data')) || DEFAULT_DATA;
@@ -454,7 +490,7 @@
 
             if (hash.startsWith('#student=')) {
                 const studentId = parseInt(hash.replace('#student=', ''));
-                const student = appData.students.find(s => s.id === studentId);
+                const student = appData.students ? appData.students.find(s => s.id === studentId) : null;
 
                 if (student) {
                     viewStudent.classList.remove('hidden');
@@ -699,6 +735,7 @@
             saveData();
         }
 
+        // 1. 生徒側：交換申請を先生に送る処理
         function redeemReward(rewardId, studentId) {
             const student = appData.students.find(s => s.id === studentId);
             const reward = appData.rewards.find(r => r.id === rewardId);
@@ -710,20 +747,64 @@
                 return;
             }
 
-            if (confirm(`「${reward.title}」を ${reward.cost} pt で利用しますか？`)) {
-                student.points -= reward.cost;
+            if (confirm(`「${reward.title}」の交換申請を先生に送りますか？`)) {
+                if (firebaseConfig.databaseURL !== "YOUR_DATABASE_URL_HERE") {
+                    db.ref('requests').push({
+                        studentId: student.id,
+                        studentName: student.name,
+                        itemName: reward.title,
+                        cost: reward.cost,
+                        status: 'pending',
+                        timestamp: Date.now()
+                    });
+                }
+                showToast(`「${reward.title}」の交換申請を先生に送りました！`);
+            }
+        }
+
+        // 2. 効果音（ファンファーレ音）
+        function playSuccessSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, index) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.frequency.setValueAtTime(freq, ctx.currentTime + index * 0.1);
+                    gain.gain.setValueAtTime(0.1, ctx.currentTime + index * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + index * 0.1 + 0.3);
+                    osc.start(ctx.currentTime + index * 0.1);
+                    osc.stop(ctx.currentTime + index * 0.1 + 0.3);
+                });
+            } catch(e) { console.log(e); }
+        }
+
+        // 3. 先生側：承認処理（ポイント減算＋音＋紙吹雪）
+        function approveRequest(requestId, studentId, cost, studentName, itemName) {
+            db.ref('requests/' + requestId).update({ status: 'approved' });
+
+            const student = appData.students.find(s => s.id === studentId);
+            if (student) {
+                student.points = Math.max(0, student.points - cost);
                 if (!appData.logs) appData.logs = [];
                 appData.logs.unshift({
                     id: Date.now(),
                     date: new Date().toLocaleString('ja-JP'),
                     type: 'use',
                     studentName: student.name,
-                    rewardTitle: reward.title,
-                    amount: -reward.cost
+                    rewardTitle: itemName,
+                    amount: -cost
                 });
-                showToast(`「${reward.title}」と交換しました！`);
                 saveData();
             }
+
+            playSuccessSound();
+            if (typeof confetti === 'function') {
+                confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            }
+            showToast(`${studentName} さんの申請を承認しました！`);
         }
 
         function renderStudentView(student) {
@@ -743,7 +824,7 @@
                             <p class="text-xs text-slate-500 mt-2">${r.desc}</p>
                         </div>
                         <button onclick="redeemReward(${r.id}, ${student.id})" ${!canAfford ? 'disabled' : ''} class="w-full py-2.5 rounded-xl font-bold text-xs transition ${canAfford ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}">
-                            ${canAfford ? 'この特典を使う' : 'ポイント不足'}
+                            ${canAfford ? '交換申請を送る' : 'ポイント不足'}
                         </button>
                     </div>
                 `;
