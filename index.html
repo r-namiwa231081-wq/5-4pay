@@ -10,7 +10,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- QRCode.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- 演出用（紙吹雪）ライブラリ -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <!-- Firebase SDK (オンライン共有用) -->
+    <!-- 演出用（紙吹雪）ライブラリ -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
@@ -831,3 +835,61 @@
     </script>
 </body>
 </html>
+// ==========================================
+// 1. 効果音（ファンファーレ風）を鳴らす関数
+// ==========================================
+function playSuccessSound() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const notes = [523.25, 659.25, 783.99, 1046.50]; // ド・ミ・ソ・ド
+  
+  notes.forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + index * 0.1);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime + index * 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + index * 0.1 + 0.3);
+    
+    osc.start(ctx.currentTime + index * 0.1);
+    osc.stop(ctx.currentTime + index * 0.1 + 0.3);
+  });
+}
+
+// ==========================================
+// 2. 生徒側：ストアで「交換申請」を送る処理
+// ==========================================
+function requestStoreItem(studentId, studentName, item) {
+  // Firebaseの 'requests' ノードに申請を追加
+  database.ref('requests').push({
+    studentId: studentId,
+    studentName: studentName,
+    itemName: item.name,
+    cost: item.cost,
+    status: 'pending', // pending: 承認待ち
+    timestamp: Date.now()
+  });
+  alert(`${item.name} の交換申請を先生に送りました！`);
+}
+
+// ==========================================
+// 3. 先生側：承認ボタンを押したときの処理（音＋紙吹雪）
+// ==========================================
+function approveRequest(requestId, studentId, cost) {
+  // ① Firebaseのステータスを承認済みに変更
+  database.ref('requests/' + requestId).update({ status: 'approved' });
+
+  // ② 生徒のポイントを減算する処理（既存のポイント更新処理と連動）
+  database.ref('students/' + studentId + '/points').transaction((currentPoints) => {
+    return (currentPoints || 0) - cost;
+  });
+
+  // ③ ★演出実行！（音と紙吹雪）
+  playSuccessSound();
+  confetti({
+    particleCount: 120,
+    spread: 80,
+    origin: { y: 0.6 }
+  });
+}
