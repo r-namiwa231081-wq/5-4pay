@@ -833,6 +833,62 @@
 
         router();
     </script>
+    <script>
+// ==========================================
+// 1. 効果音（ファンファーレ風）を鳴らす関数
+// ==========================================
+function playSuccessSound() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const notes = [523.25, 659.25, 783.99, 1046.50]; // ド・ミ・ソ・ド
+  
+  notes.forEach((freq, index) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + index * 0.1);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime + index * 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + index * 0.1 + 0.3);
+    
+    osc.start(ctx.currentTime + index * 0.1);
+    osc.stop(ctx.currentTime + index * 0.1 + 0.3);
+  });
+}
+
+// ==========================================
+// 2. 生徒側：ストアで「交換申請」を送る処理
+// ==========================================
+function requestStoreItem(studentId, studentName, item) {
+  database.ref('requests').push({
+    studentId: studentId,
+    studentName: studentName,
+    itemName: item.name,
+    cost: item.cost,
+    status: 'pending',
+    timestamp: Date.now()
+  });
+  alert(`${item.name} の交換申請を先生に送りました！`);
+}
+
+// ==========================================
+// 3. 先生側：承認ボタンを押したときの処理（音＋紙吹雪）
+// ==========================================
+function approveRequest(requestId, studentId, cost) {
+  database.ref('requests/' + requestId).update({ status: 'approved' });
+
+  database.ref('students/' + studentId + '/points').transaction((currentPoints) => {
+    return (currentPoints || 0) - cost;
+  });
+
+  playSuccessSound();
+  confetti({
+    particleCount: 120,
+    spread: 80,
+    origin: { y: 0.6 }
+  });
+}
+</script>
 </body>
 </html>
 
